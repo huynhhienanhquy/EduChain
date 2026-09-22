@@ -22,6 +22,6 @@ export async function connectDb() {
 
 export async function syncDb() {
   await import('../models/index.js');
-  await sequelize.sync({ alter: true });
+  await sequelize.sync(process.env.NODE_ENV === 'production' ? {} : { alter: true });
   console.log('Database synced');
 }

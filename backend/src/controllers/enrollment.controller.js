@@ -1,5 +1,6 @@
 import { Enrollment, Course } from '../models/index.js';
 import { isLikelyTxHash } from '../utils/response.js';
+import { InvalidPaymentError, verifyCoursePayment } from '../utils/verifyCoursePayment.js';
 
 export async function buyCourse(req, res) {
   const courseId = Number(req.body.courseId);
@@ -24,17 +25,45 @@ export async function buyCourse(req, res) {
     return res.status(400).json({ message: 'paymentType không hợp lệ' });
   }
 
+  if (process.env.NODE_ENV === 'production' && paymentType !== 'eth') {
+    return res.status(403).json({ message: 'Only verified on-chain payments are enabled in production' });
+  }
+
   if (paymentType === 'eth' && !isLikelyTxHash(txHash)) {
     return res.status(400).json({ message: 'Thiếu txHash hợp lệ cho thanh toán MetaMask' });
   }
 
-  const enrollment = await Enrollment.create({
-    studentId: req.user.id,
-    courseId,
-    paymentType,
-    txHash: txHash || null,
-    status: 'active',
-  });
+  if (paymentType === 'eth' && process.env.NODE_ENV === 'production') {
+    const reusedPayment = await Enrollment.findOne({ where: { txHash } });
+    if (reusedPayment) {
+      return res.status(400).json({ message: 'This payment has already been used' });
+    }
+    try {
+      await verifyCoursePayment({ txHash, walletAddress: req.user.walletAddress, course });
+    } catch (error) {
+      if (error instanceof InvalidPaymentError) {
+        return res.status(400).json({ message: error.message });
+      }
+      console.error('Payment verification failed:', error);
+      return res.status(502).json({ message: 'Unable to verify payment with the blockchain RPC' });
+    }
+  }
+
+  let enrollment;
+  try {
+    enrollment = await Enrollment.create({
+      studentId: req.user.id,
+      courseId,
+      paymentType,
+      txHash: txHash || null,
+      status: 'active',
+    });
+  } catch (error) {
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({ message: 'Course or payment was already used' });
+    }
+    throw error;
+  }
 
   res.status(201).json({ message: 'Course purchased successfully', data: enrollment });
 }

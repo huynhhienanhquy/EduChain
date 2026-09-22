@@ -13,6 +13,7 @@ const Enrollment = sequelize.define('Enrollment', {
   txHash: {
     type: DataTypes.STRING,
     allowNull: true,
+    unique: true,
   },
   enrolledAt: {
     type: DataTypes.DATE,

@@ -9,14 +9,19 @@ import userRoutes from './routes/user.routes.js';
 
 
 const app = express();
+app.disable('x-powered-by');
+
+const allowedOrigins = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 app.use(
   cors({
-    origin: true,
-    credentials: true,
+    origin: process.env.NODE_ENV === 'production' ? allowedOrigins : true,
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 app.get('/api/health', (_req, res) => {
   res.json({ message: 'EduChain backend is running' });
@@ -31,8 +36,11 @@ app.use('/api/users', userRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);
-  res.status(err.status || 500).json({
-    message: err.message || 'Internal server error',
+  const status = err.status || 500;
+  res.status(status).json({
+    message: status >= 500 && process.env.NODE_ENV === 'production'
+      ? 'Internal server error'
+      : err.message || 'Internal server error',
   });
 });
 

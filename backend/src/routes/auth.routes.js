@@ -6,6 +6,7 @@ import {
   profile,
   register,
   updateProfile,
+  walletChallenge,
 } from '../controllers/auth.controller.js';
 import { protect } from '../middlewares/auth.middleware.js';
 
@@ -16,6 +17,7 @@ router.post('/login', login);
 router.get('/me', protect, profile);
 router.put('/me', protect, updateProfile);
 router.put('/change-password', protect, changePassword);
+router.post('/wallet-challenge', protect, walletChallenge);
 router.post('/connect-wallet', protect, connectWallet);
 
 export default router;

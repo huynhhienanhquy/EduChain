@@ -51,10 +51,12 @@ export default function LoginPage() {
             <input type="password" placeholder="Nhập mật khẩu" value={password} onChange={(e) => setPassword(e.target.value)} />
             {error && <p className="field-error">{error}</p>}
             <button type="submit">Đăng nhập</button>
-            <div className="form-help">
-              <span className="muted">Chưa có tài khoản?</span>
-              <Link to="/register">Tạo Admin account</Link>
-            </div>
+            {!import.meta.env.PROD && (
+              <div className="form-help">
+                <span className="muted">Chưa có tài khoản?</span>
+                <Link to="/register">Tạo Admin account</Link>
+              </div>
+            )}
           </form>
         </div>
 

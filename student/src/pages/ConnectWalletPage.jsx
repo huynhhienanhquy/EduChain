@@ -32,10 +32,17 @@ export default function ConnectWalletPage() {
 
       showToast('Đang mở MetaMask để kết nối ví...', 'info');
 
-      const { walletAddress: connectedWallet } = await connectWalletAccount();
+      const { walletAddress: connectedWallet, provider } = await connectWalletAccount();
+      const challenge = await client.post('/auth/wallet-challenge', {
+        walletAddress: connectedWallet,
+      });
+      const signer = await provider.getSigner();
+      const signature = await signer.signMessage(challenge.data.data.message);
 
       const res = await client.post('/auth/connect-wallet', {
         walletAddress: connectedWallet,
+        challengeToken: challenge.data.data.challengeToken,
+        signature,
       });
 
       updateUser(res.data.data);
@@ -44,7 +51,7 @@ export default function ConnectWalletPage() {
       setMessage(successMessage);
       showToast('Kết nối ví thành công', 'success');
     } catch (err) {
-      const msg = err.message || 'Kết nối ví thất bại';
+      const msg = err.response?.data?.message || err.message || 'Kết nối ví thất bại';
       setError(msg);
       showToast(msg, 'error');
     } finally {

@@ -1,0 +1,76 @@
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-educhain_lms}
+      MYSQL_USER: ${DB_USER:-educhain}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.production}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env.production}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysql -h 127.0.0.1 -u\"$$MYSQL_USER\" -p\"$$MYSQL_PASSWORD\" \"$$MYSQL_DATABASE\" -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-educhain_lms}
+      DB_USER: ${DB_USER:-educhain}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.production}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.production}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      CHAIN_RPC_URL: ${CHAIN_RPC_URL:?Set CHAIN_RPC_URL in .env.production}
+      CHAIN_ID: ${CHAIN_ID:?Set CHAIN_ID in .env.production}
+      CONTRACT_ADDRESS: ${CONTRACT_ADDRESS:?Set CONTRACT_ADDRESS in .env.production}
+      CHAIN_CONFIRMATIONS: ${CHAIN_CONFIRMATIONS:-1}
+      EXPECTED_BROWSER_CHAIN_ID: ${VITE_GANACHE_CHAIN_ID:?Set VITE_GANACHE_CHAIN_ID in .env.production}
+      EXPECTED_BROWSER_CONTRACT_ADDRESS: ${VITE_CONTRACT_ADDRESS:?Set VITE_CONTRACT_ADDRESS in .env.production}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  student:
+    build:
+      context: ./student
+      args: &frontend_build_args
+        VITE_GANACHE_CHAIN_ID: ${VITE_GANACHE_CHAIN_ID:?Set VITE_GANACHE_CHAIN_ID in .env.production}
+        VITE_GANACHE_RPC_URL: ${VITE_GANACHE_RPC_URL:?Set VITE_GANACHE_RPC_URL in .env.production}
+        VITE_GANACHE_CURRENCY_SYMBOL: ${VITE_GANACHE_CURRENCY_SYMBOL:-ETH}
+        VITE_CHAIN_NAME: ${VITE_CHAIN_NAME:?Set VITE_CHAIN_NAME in .env.production}
+        VITE_CONTRACT_ADDRESS: ${VITE_CONTRACT_ADDRESS:?Set VITE_CONTRACT_ADDRESS in .env.production}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${STUDENT_HTTP_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  admin:
+    build:
+      context: ./admin
+      args: *frontend_build_args
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${ADMIN_HTTP_PORT:-8081}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  mysql_data:

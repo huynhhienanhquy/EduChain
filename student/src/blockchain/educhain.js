@@ -16,6 +16,7 @@ const GANACHE_CHAIN_ID = String(import.meta.env.VITE_GANACHE_CHAIN_ID || '1337')
 const GANACHE_CHAIN_HEX = `0x${Number(GANACHE_CHAIN_ID).toString(16)}`;
 const GANACHE_RPC_URL = import.meta.env.VITE_GANACHE_RPC_URL || 'http://127.0.0.1:7545';
 const GANACHE_CURRENCY_SYMBOL = import.meta.env.VITE_GANACHE_CURRENCY_SYMBOL || 'ETH';
+const CHAIN_NAME = import.meta.env.VITE_CHAIN_NAME || 'Ganache Local';
 const CONTRACT_ADDRESS_RAW = import.meta.env.VITE_CONTRACT_ADDRESS || '';
 
 function getSafeContractAddress() {
@@ -66,10 +67,10 @@ export async function switchToGanacheNetwork() {
       params: [
         {
           chainId: GANACHE_CHAIN_HEX,
-          chainName: 'Ganache Local',
+          chainName: CHAIN_NAME,
           rpcUrls: [GANACHE_RPC_URL],
           nativeCurrency: {
-            name: 'Ganache ETH',
+            name: GANACHE_CURRENCY_SYMBOL,
             symbol: GANACHE_CURRENCY_SYMBOL,
             decimals: 18,
           },

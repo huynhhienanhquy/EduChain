@@ -23,6 +23,7 @@ const User = sequelize.define('User', {
   walletAddress: {
     type: DataTypes.STRING,
     allowNull: true,
+    unique: true,
   },
 });
 

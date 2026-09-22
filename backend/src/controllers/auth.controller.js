@@ -1,4 +1,7 @@
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'node:crypto';
+import jwt from 'jsonwebtoken';
+import { getAddress, verifyMessage } from 'ethers';
 import { User } from '../models/index.js';
 import { generateToken } from '../utils/generateToken.js';
 import { isValidWalletAddress, normalizeEmail, safeUser } from '../utils/response.js';
@@ -8,6 +11,10 @@ export async function register(req, res) {
   const email = normalizeEmail(req.body.email);
   const password = String(req.body.password || '');
   const role = req.body.role === 'admin' ? 'admin' : 'student';
+
+  if (role === 'admin' && process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ message: 'Admin registration is disabled in production' });
+  }
 
   if (!fullName || !email || password.length < 6) {
     return res.status(400).json({ message: 'Full name, email và mật khẩu tối thiểu 6 ký tự là bắt buộc' });
@@ -54,18 +61,71 @@ export async function login(req, res) {
   });
 }
 
-export async function connectWallet(req, res) {
+function walletMessage({ userId, walletAddress, nonce }) {
+  return `EduChain wallet connection\nAccount: ${userId}\nWallet: ${walletAddress}\nNonce: ${nonce}`;
+}
+
+export async function walletChallenge(req, res) {
   const walletAddress = String(req.body.walletAddress || '').trim();
   if (!isValidWalletAddress(walletAddress)) {
     return res.status(400).json({ message: 'Wallet address không hợp lệ' });
   }
 
-  const existing = await User.findOne({ where: { walletAddress } });
+  let normalizedAddress;
+  try {
+    normalizedAddress = getAddress(walletAddress);
+  } catch {
+    return res.status(400).json({ message: 'Invalid wallet address checksum' });
+  }
+  const nonce = randomBytes(16).toString('hex');
+  const challengeToken = jwt.sign(
+    { purpose: 'wallet-connect', userId: req.user.id, walletAddress: normalizedAddress, nonce },
+    process.env.JWT_SECRET,
+    { expiresIn: '5m' }
+  );
+
+  res.json({
+    data: {
+      message: walletMessage({ userId: req.user.id, walletAddress: normalizedAddress, nonce }),
+      challengeToken,
+    },
+  });
+}
+
+export async function connectWallet(req, res) {
+  const walletAddress = String(req.body.walletAddress || '').trim();
+  if (!isValidWalletAddress(walletAddress)) {
+    return res.status(400).json({ message: 'Invalid wallet address' });
+  }
+
+  let normalizedAddress;
+  try {
+    normalizedAddress = getAddress(walletAddress);
+  } catch {
+    return res.status(400).json({ message: 'Invalid wallet address checksum' });
+  }
+  try {
+    const challenge = jwt.verify(String(req.body.challengeToken || ''), process.env.JWT_SECRET);
+    if (challenge.purpose !== 'wallet-connect' ||
+        challenge.userId !== req.user.id ||
+        challenge.walletAddress !== normalizedAddress) {
+      return res.status(400).json({ message: 'Invalid wallet challenge' });
+    }
+
+    const message = walletMessage(challenge);
+    if (getAddress(verifyMessage(message, String(req.body.signature || ''))) !== normalizedAddress) {
+      return res.status(400).json({ message: 'Wallet signature does not match' });
+    }
+  } catch {
+    return res.status(400).json({ message: 'Invalid or expired wallet signature' });
+  }
+
+  const existing = await User.findOne({ where: { walletAddress: normalizedAddress } });
   if (existing && existing.id !== req.user.id) {
     return res.status(400).json({ message: 'Ví này đã được liên kết với tài khoản khác' });
   }
 
-  req.user.walletAddress = walletAddress;
+  req.user.walletAddress = normalizedAddress;
   await req.user.save();
   res.json({ message: 'Wallet connected', data: safeUser(req.user) });
 }

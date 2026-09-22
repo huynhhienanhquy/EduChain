@@ -27,7 +27,7 @@ export default function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<HomePage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/register" element={import.meta.env.PROD ? <Navigate to="/login" replace /> : <RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/connect-wallet" element={<PrivateRoute><ConnectWalletPage /></PrivateRoute>} />
         <Route path="/create-course" element={<PrivateRoute><CreateCoursePage /></PrivateRoute>} />
